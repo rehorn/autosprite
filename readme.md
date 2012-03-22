@@ -1,0 +1,1 @@
+python script for automatically making css sprite by scanning css files
