@@ -17,8 +17,11 @@ CONFIG = {
     'REPLACER': 'simple',
     'CSS_OUTPUT': './',
     'SPRITE_OUTPUT': './',
-    'REGX_URL': r'url\s*\(\s*([\'\"]?)([^\'\"\)]+)\\1\s*\)'
+    'IMAGE_URL_REGX': 'url\(("|\')?(.*?)("|\')?\)'
 }
+
+# cache all images
+CACHE = {}
 
 def log(msg, spliteLine = ''):
     if not CONFIG['IS_QUIET']:
@@ -59,8 +62,14 @@ PACKER = {
 class SimpleReplacer(object):
 
     def process(self, cssFile):
+        log('SimpleReplacer')
+        imgRegx = re.compile(CONFIG['IMAGE_URL_REGX'], re.IGNORECASE)
         for line in open(cssFile.path).xreadlines():
-            
+            imgUrl = imgRegx.search(line)
+            if imgUrl:
+                absPath = os.path.abspath(imgUrl.group(2))
+                img = CACHE[absPath]
+
 
 REPLACER = {
     'simple': SimpleReplacer
@@ -79,6 +88,7 @@ class Image(object):
         imagePath = os.path.join(sprite.path, name)
         # imagePath = imagePath.replace('\\', '/')
         self.absPath = os.path.abspath(imagePath)
+        CACHE[self.absPath] = self
         imageFile = open(imagePath, "rb")
 
         try:
@@ -202,7 +212,7 @@ class CssFile(object):
 
     def process(self):
         replacer = REPLACER.get(CONFIG['REPLACER'])
-        self.replacer = replacer
+        self.replacer = replacer()
         self.replacer.process(self)
 
 class CssManager(object):
@@ -219,14 +229,13 @@ class CssManager(object):
         for root, dirs, files in os.walk(self.path, True):
             for f in files:
                 if checkExt(f, CONFIG['ALLOW_CSS_EXT']):
-                    css = CssFile(f)
+                    css = CssFile(os.path.join(self.path, f))
                     self.cssFiles.append(css)
 
     def _replaceCss(self):
         log('_replaceCss css file...')
         for cssFile in self.cssFiles:
-
-        
+            cssFile.process()
 
     def process(self):
         log('CssReplaceManager process')
@@ -242,6 +251,7 @@ def main():
     spriteMan = SpriteManager(imgSource, imgOutput)
     spriteMan.process()
     cssMan = CssManager(cssSource, cssOutput)
+    cssMan.process()
 
 if __name__ == '__main__':
     log('AutoSprite Start', 80 * '*')
