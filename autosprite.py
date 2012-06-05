@@ -2,7 +2,7 @@
 #encoding=utf-8
 #python2.6
 
-import sys, os, re, copy
+import sys, os, re, copy, hashlib, commands, time
 from PIL import Image as PImage
 
 # default setting
@@ -11,6 +11,7 @@ CONFIG = {
     'TRANSPARENT': (255, 255, 255, 0),
     'IS_QUIET': False,
     'INDENT': 4,
+    'AUTO_VERSION': 1,
     'ROOT_SPRITE_NAME': 'app-sprite',
     'ALLOW_IMG_EXT': ['png', 'jpg', 'jpeg', 'gif'],
     'ALLOW_CSS_EXT': ['css'],
@@ -19,10 +20,11 @@ CONFIG = {
     'REPLACER': 'simple',
     'IMG_ORDER': 'maxside',
     'CSS_INPUT': './css/',
-    'IMG_INPUT': './img/',
+    'IMG_INPUT': './images/',
     # 'IMG_INPUT': './last-guardian-sprites/',
     'CSS_OUTPUT': './',
     'SPRITE_OUTPUT': './images2/',
+    'SVN_LAST_UPDATE_REGX': 'Last Changed Date\:\s*(.+)\n*',
     'IMAGE_URL_REGX': 'url\(("|\')?(.*?)("|\')?\)'
 }
 
@@ -44,12 +46,18 @@ def checkExt(path, allowExts = CONFIG['ALLOW_IMG_EXT']):
     # test=>is exits; exec=>return first match val; 
     # match=>return match array; search=>indexOf; replace; split
     extRegx = re.compile('.+\.(%s)$' % exts, re.IGNORECASE)
-    return not path.startswith('.') and extRegx.match(path)
+    noSpriteRegx = re.compile('.+-n\.(%s)$' % exts, re.IGNORECASE)
+    xRepeatRegx = re.compile('.+-x\.(%s)$' % exts, re.IGNORECASE)
+    yRepeatRegx = re.compile('.+-y\.(%s)$' % exts, re.IGNORECASE)
+    return not path.startswith('.') and not noSpriteRegx.match(path) and not xRepeatRegx.match(path) and not yRepeatRegx.match(path) and extRegx.match(path)
 
 def mkdir(path):
     path = opath.dirname(path)
     if not opath.exists(path):
         os.makedirs(path)
+
+def getFileSvn(path):
+    pass
 
 # error handling
 class PILError(Exception):
@@ -211,8 +219,10 @@ class SimpleReplacer(object):
         for line in open(cssFile.path).xreadlines():
             imgUrl = imgRegx.search(line)
             if imgUrl:
+                orgUrl = imgUrl.group(2)
+                orgUrl = orgUrl if orgUrl.find('?') == -1 else orgUrl[0:orgUrl.find('?')]
                 dirName =  opath.dirname(cssFile.path)
-                url = opath.join(dirName, imgUrl.group(2))
+                url = opath.join(dirName, orgUrl)
                 absPath = opath.abspath(url)
                 img = CACHE.get(absPath)
                 if img:
@@ -220,8 +230,14 @@ class SimpleReplacer(object):
                     cssDir = opath.dirname(cssFile.output)
                     relPath = opath.relpath(spriteDir, cssDir)
                     spriteRelPath = opath.join(relPath, img.sprite.fileName)
-                    t.append(imgRegx.sub('url(\"%s\")' % spriteRelPath.replace('\\','/'), line))
+                    t.append(imgRegx.sub('url(\"%s?v=%s\")' % (spriteRelPath.replace('\\','/'), img.sprite.md5), line))
                     t.append('%sbackground-position: -%spx -%spx;\n' % ( ' ' * CONFIG['INDENT'], img.x, img.y))
+                else:
+                    if(CONFIG['AUTO_VERSION']):
+                        output = commands.getoutput("svn info %s" % absPath)
+                        ver = re.compile(CONFIG['SVN_LAST_UPDATE_REGX']).search(output)
+                        ver = ver.group(1) if ver else time.strftime('%Y%m%d')
+                        t.append(imgRegx.sub('url(\"%s?v=%s\")' % (orgUrl, ver), line))
             else:
                 t.append(line)
 
@@ -358,6 +374,15 @@ class Sprite(object):
     @property
     def fileName(self):
         return '%s.png' % self.name
+
+    @property
+    def md5(self):
+        m = hashlib.md5()
+        spriteFile = open(self.output, 'rb')
+        m.update(spriteFile.read())
+        spriteFile.close()
+        md5 = m.hexdigest()
+        return '%s%s' % (md5[0:3], md5[-3:])
 
 class SpriteManager(object):
 
