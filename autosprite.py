@@ -2,10 +2,11 @@
 #encoding=utf-8
 #python2.6
 
-import sys, os, re, copy, hashlib, commands, time
+import sys, os, re, copy, hashlib, commands, time, getopt, json, codecs
 from PIL import Image as PImage
 
 # default setting
+defaultConfig = './autosprite.sprite'
 CONFIG = {
     'VERSION': '0.1.1',
     'TRANSPARENT': (255, 255, 255, 0),
@@ -24,7 +25,7 @@ CONFIG = {
     # 'IMG_INPUT': './last-guardian-sprites/',
     'CSS_OUTPUT': './',
     'SPRITE_OUTPUT': './images2/',
-    'SVN_LAST_UPDATE_REGX': 'Last Changed Date\:\s*(.+)\n*',
+    'SVN_LAST_CHANGED_REGX': 'Last Changed Rev\:\s*(\d+)\s*',
     'IMAGE_URL_REGX': 'url\(("|\')?(.*?)("|\')?\)'
 }
 
@@ -216,6 +217,7 @@ class SimpleReplacer(object):
         log('SimpleReplacer')
         imgRegx = re.compile(CONFIG['IMAGE_URL_REGX'], re.IGNORECASE)
         t = []
+        u = []
         for line in open(cssFile.path).xreadlines():
             imgUrl = imgRegx.search(line)
             if imgUrl:
@@ -235,14 +237,17 @@ class SimpleReplacer(object):
                 else:
                     if(CONFIG['AUTO_VERSION']):
                         output = commands.getoutput("svn info %s" % absPath)
-                        ver = re.compile(CONFIG['SVN_LAST_UPDATE_REGX']).search(output)
+                        ver = re.compile(CONFIG['SVN_LAST_CHANGED_REGX']).search(output)
                         ver = ver.group(1) if ver else time.strftime('%Y%m%d')
                         t.append(imgRegx.sub('url(\"%s?v=%s\")' % (orgUrl, ver), line))
             else:
                 t.append(line)
 
+        for l in t:
+            u.append(l.decode('utf-8'))
+
         mkdir(cssFile.output)
-        open(cssFile.output,"w").write("".join(t))
+        codecs.open(cssFile.output, "w", "utf-8").write("".join(u))
         log('save css file ' + cssFile.output)
 
 REPLACER = {
@@ -464,7 +469,38 @@ def main():
     cssMan = CssManager(cssSource, cssOutput)
     cssMan.process()
 
+def parseConfig(pyConfig):
+    log('Parse Config start', 80 * '*')
+    global CONFIG
+    jsonConfig = json.loads(open(pyConfig).read())
+    dirName = os.path.dirname(pyConfig)
+    CONFIG['IMG_INPUT'] = os.path.join(dirName, jsonConfig.get('IMG_INPUT', CONFIG['IMG_INPUT']))
+    CONFIG['SPRITE_OUTPUT'] = os.path.join(dirName, jsonConfig.get('IMG_OUTPUT', CONFIG['SPRITE_OUTPUT']))
+    CONFIG['CSS_INPUT'] = os.path.join(dirName, jsonConfig.get('CSS_INPUT', CONFIG['CSS_INPUT']))
+    CONFIG['CSS_OUTPUT'] = os.path.join(dirName, jsonConfig.get('CSS_OUTPUT', CONFIG['CSS_OUTPUT']))
+    CONFIG['IS_QUIET'] = jsonConfig.get('IS_QUIET', CONFIG['IS_QUIET'])
+    CONFIG['INDENT'] = jsonConfig.get('INDENT', CONFIG['INDENT'])
+    CONFIG['AUTO_VERSION'] = jsonConfig.get('AUTO_VERSION', CONFIG['AUTO_VERSION'])
+    CONFIG['ROOT_SPRITE_NAME'] = jsonConfig.get('ROOT_SPRITE_NAME', CONFIG['ROOT_SPRITE_NAME'])
+    CONFIG['ALLOW_IMG_EXT'] = jsonConfig.get('ALLOW_IMG_EXT', CONFIG['ALLOW_IMG_EXT'])
+    CONFIG['ALLOW_CSS_EXT'] = jsonConfig.get('ALLOW_CSS_EXT', CONFIG['ALLOW_CSS_EXT'])
+    CONFIG['PACKER'] = jsonConfig.get('PACKER', CONFIG['PACKER'])
+    CONFIG['REPLACER'] = jsonConfig.get('REPLACER', CONFIG['REPLACER'])
+    CONFIG['IMG_ORDER'] = jsonConfig.get('IMG_ORDER', CONFIG['IMG_ORDER'])
+
 if __name__ == '__main__':
+
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "f:", ["config="])
+    except getopt.GetoptError, err:
+        print str(err)
+
+    pyConfig = defaultConfig
+    for o, a in opts:
+        if o in ("-f", "--config"):
+            pyConfig = a
+    parseConfig(pyConfig)
+
     log('AutoSprite Start', 80 * '*')
     main()
     log('AutoSprite Finished', 80 * '*')
