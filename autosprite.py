@@ -73,6 +73,12 @@ class PackedSortError(Exception):
     """
     err_code = 11
 
+class InvalidImageOrderingError(Exception):
+
+    """Image Order not support
+    """
+    err_code = 12
+
 
 # sprite packer algorithm
 # reference: 
@@ -472,8 +478,10 @@ def main():
 def parseConfig(pyConfig):
     log('Parse Config start', 80 * '*')
     global CONFIG
-    jsonConfig = json.loads(open(pyConfig).read())
-    dirName = os.path.dirname(pyConfig)
+    # jsonConfig = json.loads(open(pyConfig).read())
+    jsonConfig = json.loads(pyConfig)
+    # dirName = os.path.dirname(pyConfig)
+    dirName = '.'
     CONFIG['IMG_INPUT'] = os.path.join(dirName, jsonConfig.get('IMG_INPUT', CONFIG['IMG_INPUT']))
     CONFIG['SPRITE_OUTPUT'] = os.path.join(dirName, jsonConfig.get('IMG_OUTPUT', CONFIG['SPRITE_OUTPUT']))
     CONFIG['CSS_INPUT'] = os.path.join(dirName, jsonConfig.get('CSS_INPUT', CONFIG['CSS_INPUT']))
@@ -491,14 +499,15 @@ def parseConfig(pyConfig):
 if __name__ == '__main__':
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "f:", ["config="])
+        opts, args = getopt.getopt(sys.argv[1:], "c:", ["config="])
     except getopt.GetoptError, err:
         print str(err)
 
     pyConfig = defaultConfig
     for o, a in opts:
-        if o in ("-f", "--config"):
+        if o in ("-c", "--config"):
             pyConfig = a
+
     parseConfig(pyConfig)
 
     log('AutoSprite Start', 80 * '*')
