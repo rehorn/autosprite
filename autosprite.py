@@ -238,7 +238,8 @@ class SimpleReplacer(object):
                     cssDir = opath.dirname(cssFile.output)
                     relPath = opath.relpath(spriteDir, cssDir)
                     spriteRelPath = opath.join(relPath, img.sprite.fileName)
-                    t.append(imgRegx.sub('url(\"%s?v=%s\") no-repeat %spx %spx' % (spriteRelPath.replace('\\','/'), img.sprite.md5, img.x, img.y), line))
+                    t.append(imgRegx.sub('url(\"%s?v=%s\")' % (spriteRelPath.replace('\\','/'), img.sprite.md5), line))
+                    t.append('%sbackground-position: -%spx -%spx;\n' % ( ' ' * CONFIG['INDENT'], img.x, img.y))
                 else:
                     if(CONFIG['AUTO_VERSION']):
                         output = commands.getoutput("svn info %s" % absPath)
